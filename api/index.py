@@ -81,8 +81,29 @@ class handler(BaseHTTPRequestHandler):
                     "error": str(e),
                     "status": "error"
                 })
+                        success_count = sum(1 for p in positions if p.get('status') == 'success')
         
+        response = {
+            "status": "success",
+     
         # Calculate totals
         total_value_usd = sum(p.get('position_value', 0) for p in positions if p.get('status') == 'success')
         usd_to_cad_rate = 1.35
         total_value_cad = total_value_usd * usd_to_cad_rate
+        "timestamp": datetime.now().isoformat(),
+            "elapsed_time": round(time.time() - start_time, 2),
+            "summary": {
+                "total_value_usd": round(total_value_usd, 2),
+                "total_value_cad": round(total_value_cad, 2),
+                "usd_to_cad_rate": usd_to_cad_rate,
+                "total_positions": len(portfolio_holdings),
+                "successful_updates": success_count,
+                "failed_updates": len(portfolio_holdings) - success_count,
+                "total_shares": sum(h['shares'] for h in portfolio_holdings)
+            },
+            "positions": positions[:10]  # Return top 10 for dashboard
+        }
+        
+        self.wfile.write(json.dumps(response, indent=2).encode())
+        return
+
