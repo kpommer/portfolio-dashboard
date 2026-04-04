@@ -11,7 +11,6 @@ class handler(BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Origin', '*')
         self.end_headers()
         
-        # YOUR EXACT PORTFOLIO - 21 positions
         portfolio_holdings = [
             {"ticker": "ARKQ", "shares": 30},
             {"ticker": "BE", "shares": 20},
@@ -39,19 +38,22 @@ class handler(BaseHTTPRequestHandler):
         start_time = time.time()
         positions = []
         
-        # Fetch prices for each holding
+        # Fetch prices with rate limiting (1 second delay)
         for holding in portfolio_holdings:
             ticker = holding['ticker']
             shares = holding['shares']
             
+            # Rate limit - wait between requests
+            time.sleep(1)
+            
             try:
                 stock = yf.Ticker(ticker)
-                info = stock.info
+                hist = stock.history(period='1d')
                 
-                current_price = info.get('regularMarketPrice')
-                previous_close = info.get('regularMarketPreviousClose', current_price)
-                
-                if current_price and previous_close:
+                if not hist.empty and len(hist) > 0:
+                    current_price = hist['Close'].iloc[-1]
+                    previous_close = hist['Close'].iloc[0] if len(hist) > 1 else current_price
+                    
                     daily_change = current_price - previous_close
                     daily_change_pct = (daily_change / previous_close) * 100 if previous_close != 0 else 0
                     position_value = shares * current_price
@@ -70,15 +72,14 @@ class handler(BaseHTTPRequestHandler):
                     positions.append({
                         "ticker": ticker,
                         "shares": shares,
-                        "error": "Price data unavailable",
+                        "error": "No price data",
                         "status": "failed"
                     })
-                    
             except Exception as e:
                 positions.append({
                     "ticker": ticker,
                     "shares": shares,
-                    "error": str(e),
+                    "error": str(e)[:100],
                     "status": "error"
                 })
         
@@ -94,7 +95,7 @@ class handler(BaseHTTPRequestHandler):
             "timestamp": datetime.now().isoformat(),
             "elapsed_time": round(time.time() - start_time, 2),
             "summary": {
-                "total_value_usd": round(total_value_usd, 2),
+"total_value_usd": round(total_value_usd, 2),
                 "total_value_cad": round(total_value_cad, 2),
                 "usd_to_cad_rate": usd_to_cad_rate,
                 "total_positions": len(portfolio_holdings),
@@ -102,7 +103,7 @@ class handler(BaseHTTPRequestHandler):
                 "failed_updates": len(portfolio_holdings) - success_count,
                 "total_shares": sum(h['shares'] for h in portfolio_holdings)
             },
-            "positions": positions[:10]
+            "positions": positions
         }
         
         self.wfile.write(json.dumps(response, indent=2).encode())
